@@ -1,0 +1,11 @@
+@import url("https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cairo:wght@200..1000&family=Gveret+Levin&display=swap");
+@import "tailwindcss";
+@plugin './hero.js';
+@source '../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}';
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-bebas: "Bebas Neue", sans-serif;
+  --font-cairo: "Cairo", sans-serif;
+  --font-gveret: "Gveret Levin", serif;
+}
