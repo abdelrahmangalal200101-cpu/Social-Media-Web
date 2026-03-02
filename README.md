@@ -1,16 +1,79 @@
-# React + Vite
+# Social Media Web App 🚀
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A **full-featured Social Media Web Application** built with **React**, **React Query**, and **Hero UI**.  
+This platform simulates a real-world social network with **authentication**, **posts**, **comments**, **likes**, **shares**, **bookmarks**, **notifications**, and **user relationships**.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 🌟 Features
 
-## React Compiler
+### 🔐 Authentication
+- Register & Login
+- JWT-based authentication
+- Change password
+- Protected routes
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 👤 Users
+- User profile page
+- Follow / Unfollow users
+- Follow suggestions
+- Followers & Following lists
+- Explore users
 
-## Expanding the ESLint configuration
+### 📝 Posts
+- Create, Read, Update, Delete (CRUD)
+- Post details page
+- Home feed (followers’ posts)
+- Explore feed
+- Bookmark / Unbookmark posts
+- Share posts
+- Like / Unlike posts with animated UI
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+### 💬 Comments
+- CRUD comments on posts
+- Real-time UI updates
+
+### 🔔 Notifications
+- Get notifications and counts
+- Mark one as read
+- Mark all as read
+
+---
+
+## 🛠 Tech Stack
+- **Frontend:** React, Context API, React Query
+- **HTTP Requests:** Axios
+- **Animations:** Framer Motion
+- **Auth:** JWT
+- **State Management:** React Query & Context
+- **Routing:** React Router
+- **UI Library:** Hero UI (`@heroui/react`)
+
+---
+
+## ⚡ Live Demo
+Check the live version here: [🌐 Live Demo](https://social-media-web-self.vercel.app)
+
+---
+
+## 🧠 Architecture Highlights
+- Optimized React Query caching and invalidation
+- Clean separation between UI and data logic
+- Reusable components for posts, comments, modals, and cards
+- Optimistic updates for smooth UX
+- Animated interactions for like/share/bookmark buttons
+
+---
+
+## ⚙️ Setup & Run
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/<your-username>/<repo-name>.git
+
+# 2. Install dependencies
+cd <repo-name>
+npm install
+
+# 3. Run the app
+npm start
