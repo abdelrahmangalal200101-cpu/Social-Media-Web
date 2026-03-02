@@ -31,8 +31,18 @@ export default function AnimatedCover({
         xmlns="http://www.w3.org/2000/svg"
       >
         <defs>
-          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#a78bfa" strokeWidth="0.5" />
+          <pattern
+            id="grid"
+            width="40"
+            height="40"
+            patternUnits="userSpaceOnUse"
+          >
+            <path
+              d="M 40 0 L 0 0 0 40"
+              fill="none"
+              stroke="#a78bfa"
+              strokeWidth="0.5"
+            />
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill="url(#grid)" />
@@ -60,9 +70,11 @@ export default function AnimatedCover({
       <motion.div
         className="absolute rounded-full blur-3xl"
         style={{
-          width: 220, height: 220,
+          width: 220,
+          height: 220,
           background: "radial-gradient(circle, #7c3aed88, transparent 70%)",
-          top: "-40px", left: "-40px",
+          top: "-40px",
+          left: "-40px",
         }}
         animate={{ x: [0, 40, 0], y: [0, 30, 0] }}
         transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
@@ -72,9 +84,11 @@ export default function AnimatedCover({
       <motion.div
         className="absolute rounded-full blur-3xl"
         style={{
-          width: 260, height: 260,
+          width: 260,
+          height: 260,
           background: "radial-gradient(circle, #a855f766, transparent 70%)",
-          bottom: "-60px", right: "-40px",
+          bottom: "-60px",
+          right: "-40px",
         }}
         animate={{ x: [0, -50, 0], y: [0, -30, 0] }}
         transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
@@ -84,9 +98,11 @@ export default function AnimatedCover({
       <motion.div
         className="absolute rounded-full blur-2xl"
         style={{
-          width: 120, height: 120,
+          width: 120,
+          height: 120,
           background: "radial-gradient(circle, #c084fc55, transparent 70%)",
-          top: "30%", right: "25%",
+          top: "30%",
+          right: "25%",
         }}
         animate={{ scale: [1, 1.5, 1], opacity: [0.4, 0.8, 0.4] }}
         transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
@@ -94,18 +110,27 @@ export default function AnimatedCover({
 
       {/* ── Floating particles ── */}
       {particles.map((_, i) => {
-        const size  = 2 + (i % 5);
-        const x     = (i * 37 + 11) % 100;
-        const y     = (i * 53 + 7)  % 100;
-        const dur   = 4 + (i % 6);
+        const size = 2 + (i % 5);
+        const x = (i * 37 + 11) % 100;
+        const y = (i * 53 + 7) % 100;
+        const dur = 4 + (i % 6);
         const delay = (i * 0.4) % 4;
         return (
           <motion.div
             key={i}
             className="absolute rounded-full bg-purple-300"
             style={{ width: size, height: size, left: `${x}%`, top: `${y}%` }}
-            animate={{ y: [0, -20, 0], opacity: [0, 0.8, 0], scale: [0.5, 1.2, 0.5] }}
-            transition={{ duration: dur, repeat: Infinity, delay, ease: "easeInOut" }}
+            animate={{
+              y: [0, -20, 0],
+              opacity: [0, 0.8, 0],
+              scale: [0.5, 1.2, 0.5],
+            }}
+            transition={{
+              duration: dur,
+              repeat: Infinity,
+              delay,
+              ease: "easeInOut",
+            }}
           />
         );
       })}
@@ -120,14 +145,15 @@ export default function AnimatedCover({
           <div
             className="absolute inset-0 blur-2xl rounded-full"
             style={{
-              background: "radial-gradient(ellipse, #a855f666 0%, transparent 70%)",
+              background:
+                "radial-gradient(ellipse, #a855f666 0%, transparent 70%)",
               transform: "scale(2)",
             }}
           />
 
           {subtitle && (
             <motion.p
-              className="relative z-10 mb-3 text-xs tracking-[0.45em] uppercase font-semibold px-4 py-1 rounded-full border border-purple-400/50"
+              className="relative z-10 mb-3 text-xs tracking-[0.45em] uppercase font-semibold px-4 py-1 rounded-full border border-purple-400/50 text-center"
               style={{
                 color: "#e9d5ff",
                 background: "rgba(109, 40, 217, 0.35)",
@@ -155,8 +181,6 @@ export default function AnimatedCover({
           >
             {title}
           </motion.h1>
-
-
         </motion.div>
       </div>
 
@@ -164,7 +188,8 @@ export default function AnimatedCover({
       <div
         className="absolute bottom-0 left-0 right-0 h-16"
         style={{
-          background: "linear-gradient(to bottom, transparent, rgba(30,0,61,0.4))",
+          background:
+            "linear-gradient(to bottom, transparent, rgba(30,0,61,0.4))",
         }}
       />
     </div>
