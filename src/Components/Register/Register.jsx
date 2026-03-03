@@ -4,10 +4,25 @@ import { Link, useNavigate } from "react-router-dom";
 import * as z from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CheckCircle2, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  XCircle,
+  User,
+  AtSign,
+  Mail,
+  Lock,
+  Calendar,
+  UserPlus,
+  Loader2,
+  Eye,
+  EyeOff,
+  ChevronRight,
+} from "lucide-react";
 import axios from "axios";
 import { addToast } from "@heroui/react";
+import { motion, AnimatePresence } from "framer-motion";
 
+// --- Validation Schema ---
 const schema = z
   .object({
     name: z
@@ -31,28 +46,134 @@ const schema = z
       .nonempty("Password Is Required")
       .regex(
         /^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$/,
-        "Password must include uppercase, lowercase, number, and special character",
+        "Password too weak",
       ),
     rePassword: z.string().nonempty("Repassword is Required"),
     dateOfBirth: z.string().refine((date) => {
       const userDate = new Date(date);
       const currentDate = new Date();
-      return (
-        currentDate.getFullYear() - userDate.getFullYear() >= 18 &&
-        currentDate.getFullYear() - userDate.getFullYear() <= 70
-      );
+      const age = currentDate.getFullYear() - userDate.getFullYear();
+      return age >= 18 && age <= 70;
     }, "Your age must be between 18 and 70"),
     gender: z.enum(["male", "female"], {
       errorMap: () => ({ message: "Please select your gender" }),
     }),
   })
   .refine((values) => values.password === values.rePassword, {
-    message: "Password and Repassword must be the same",
+    message: "Passwords must match",
     path: ["rePassword"],
   });
 
+// --- Animation Variants ---
+const pageVariants = {
+  hidden: { opacity: 0, x: 40 },
+  visible: {
+    opacity: 1,
+    x: 0,
+    transition: { duration: 0.55, ease: "easeOut" },
+  },
+};
+const cardVariants = {
+  hidden: { opacity: 0, y: 40, scale: 0.97 },
+  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.6 } },
+};
+const stagger = {
+  visible: { transition: { staggerChildren: 0.05, delayChildren: 0.2 } },
+};
+const fadeUp = {
+  hidden: { opacity: 0, y: 15 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
+};
+
+// --- Reusable Floating Field Component ---
+function FloatingField({
+  id,
+  label,
+  type = "text",
+  registration,
+  isValid,
+  hasError,
+  errorMessage,
+  icon: Icon,
+  rightSlot,
+}) {
+  return (
+    <motion.div variants={fadeUp} className="relative w-full">
+      <span
+        className={`absolute left-3.5 top-4.25 z-10 transition-colors duration-200 
+        ${hasError ? "text-red-400" : isValid ? "text-green-500" : "text-slate-400"}`}
+      >
+        <Icon size={17} />
+      </span>
+
+      <input
+        id={id}
+        type={type}
+        {...registration}
+        placeholder=" "
+        className={`peer w-full rounded-xl pl-10 pr-12 pt-5 pb-2 bg-slate-50 focus:bg-white 
+          focus:outline-none transition-all duration-300 border-2 text-sm text-slate-800
+          ${hasError ? "border-red-400 focus:border-red-500" : isValid ? "border-green-400 focus:border-green-500" : "border-slate-200 focus:border-purple-500"}`}
+      />
+
+      <label
+        htmlFor={id}
+        className={`absolute left-10 top-4 text-sm pointer-events-none transition-all duration-200 origin-left
+          peer-focus:-translate-y-3 peer-focus:scale-[0.78] peer-not-placeholder-shown:-translate-y-3 peer-not-placeholder-shown:scale-[0.78]
+          ${hasError ? "text-red-400" : isValid ? "text-green-500" : "text-slate-400"}`}
+      >
+        {label}
+      </label>
+
+      <div className="absolute right-3.5 top-4 flex items-center gap-1">
+        {rightSlot}
+        <AnimatePresence mode="wait">
+          {isValid && (
+            <motion.span
+              key="ok"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0 }}
+            >
+              <CheckCircle2 size={18} className="text-green-500" />
+            </motion.span>
+          )}
+          {hasError && (
+            <motion.span
+              key="err"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0 }}
+            >
+              <XCircle size={18} className="text-red-500" />
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <AnimatePresence>
+        {hasError && (
+          <motion.p
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="text-red-500 text-[11px] mt-1 ml-1"
+          >
+            {errorMessage}
+          </motion.p>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
 export default function Register() {
-  const form = useForm({
+  const navigate = useNavigate();
+  const [isloading, setloading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showRePassword, setShowRePassword] = useState(false);
+
+  const { register, handleSubmit, formState, watch } = useForm({
     defaultValues: {
       name: "",
       username: "",
@@ -66,502 +187,225 @@ export default function Register() {
     mode: "onBlur",
   });
 
-  const navigate = useNavigate();
-
-  const [isloading, setloading] = useState(false);
-  const { register, handleSubmit, formState, watch } = form;
   const { errors, touchedFields } = formState;
-
   const watchedFields = watch();
+
+  const isFieldValid = (f) =>
+    touchedFields[f] && !errors[f] && watchedFields[f];
+  const hasFieldError = (f) => touchedFields[f] && errors[f];
 
   function FormValidation(values) {
     setloading(true);
-    console.log(values);
     axios
-      .post("https://route-posts.routemisr.com/users/signup", values , {
-        headers : {
-          "Content-Type" : "application/json"
-        }
-      })
+      .post("https://route-posts.routemisr.com/users/signup", values)
       .then((res) => {
-
         addToast({
-          title: "Successfully Created",
-          description: res.data.message,
-          timeout: 2000,
-          shouldShowTimeoutProgress: true,
+          title: "Account Created!",
+          description: "Welcome to our community 🚀",
           color: "success",
+          timeout: 2500,
         });
-        setloading(false);
-        setTimeout(() => {
-          navigate("/login");
-        }, 2500);
+        setTimeout(() => navigate("/login"), 2500);
       })
       .catch((err) => {
-
         addToast({
-          title: "Something Went Wrong",
-          description: err.response.data.message,
+          title: "Registration Failed",
+          description: err.response?.data?.message || "Something went wrong",
           color: "danger",
           timeout: 3000,
-          shouldShowTimeoutProgress: true,
         });
         setloading(false);
       });
   }
 
-  const isFieldValid = (fieldName) => {
-    if (fieldName === "rePassword") {
-      return (
-        touchedFields[fieldName] &&
-        !errors[fieldName] &&
-        watchedFields[fieldName] &&
-        watchedFields.password === watchedFields.rePassword &&
-        watchedFields.password !== ""
-      );
-    }
-    return (
-      touchedFields[fieldName] && !errors[fieldName] && watchedFields[fieldName]
-    );
-  };
-
-  const hasFieldError = (fieldName) => {
-    if (fieldName === "rePassword") {
-      return (
-        (touchedFields[fieldName] && errors[fieldName]) ||
-        (touchedFields[fieldName] &&
-          watchedFields.password &&
-          watchedFields.rePassword &&
-          watchedFields.password !== watchedFields.rePassword)
-      );
-    }
-    return touchedFields[fieldName] && errors[fieldName];
-  };
-
   return (
-    <section>
-      <div className="flex flex-col lg:flex-row">
-        <div className="w-full lg:w-1/2 h-125 lg:h-auto flex justify-center items-center">
-          <BgAnimation />
-        </div>
-        <div className="w-full lg:w-1/2 flex px-6 md:px-12 lg:px-24 py-10 justify-center items-center bg-slate-50">
-          <form
-            onSubmit={handleSubmit(FormValidation)}
-            className="p-6 md:p-10 w-full rounded-2xl bg-white border border-purple-400/30 flex flex-col items-center gap-3.5"
+    <section className="min-h-screen flex flex-col lg:flex-row bg-slate-50">
+      {/* Left Side: Animation */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.8 }}
+        className="w-full lg:w-1/2 h-56 sm:h-72 lg:h-screen shrink-0"
+      >
+        <BgAnimation />
+      </motion.div>
+
+      <motion.div
+        variants={pageVariants}
+        initial="hidden"
+        animate="visible"
+        className="w-full lg:w-1/2 flex items-center justify-center px-5 sm:px-12 py-10"
+      >
+        <motion.div
+          variants={cardVariants}
+          className="w-full max-w-xl bg-white rounded-3xl border border-purple-200/60 shadow-xl shadow-purple-100/40 p-7 sm:p-10"
+        >
+          <motion.div
+            variants={stagger}
+            initial="hidden"
+            animate="visible"
+            className="flex flex-col gap-5"
           >
-            <h2 className="text-2xl md:text-4xl font-bold text-slate-900">
-              Create account
-            </h2>
-            <p>
-              Already Have Account ?{" "}
-              <Link className="text-blue-600" to={"/login"}>
-                Sign in
-              </Link>{" "}
-            </p>
-            <div className="mt-4 w-full flex flex-col gap-6">
-              <div className="relative">
-                <input
-                  type="text"
-                  {...register("name")}
-                  id="name"
-                  className={`peer w-full rounded-xl p-3 pr-12 bg-slate-50 [:not(:placeholder-shown)]:bg-white focus:bg-white focus:outline-0 transition-all duration-300 border-2 placeholder-transparent ${
-                    hasFieldError("name")
-                      ? "border-red-400 focus:border-red-500"
-                      : isFieldValid("name")
-                        ? "border-green-400 focus:border-green-500"
-                        : "border-slate-200 focus:border-purple-500"
-                  }`}
-                  placeholder="Enter Your Name"
-                />
-                <label
-                  htmlFor="name"
-                  className={`absolute left-3 -top-3 bg-slate-50 px-2 text-slate-600 transition-all duration-300 pointer-events-none text-xs
-                    peer-placeholder-shown:top-3 peer-placeholder-shown:bg-transparent peer-placeholder-shown:text-base
-                    peer-focus:-top-3 peer-focus:bg-white peer-focus:text-xs
-                    peer-[:not(:placeholder-shown)]:-top-3 peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:text-xs ${
-                      hasFieldError("name")
-                        ? "peer-focus:text-red-500"
-                        : isFieldValid("name")
-                          ? "peer-focus:text-green-500"
-                          : "peer-focus:text-purple-500"
-                    }`}
-                >
-                  Enter Your Name
-                </label>
-
-                <div className="absolute right-3 top-3.5">
-                  {isFieldValid("name") && (
-                    <div className="animate-[scale-in_0.3s_ease-out]">
-                      <CheckCircle2 className="w-6 h-6 text-green-500" />
-                    </div>
-                  )}
-                  {hasFieldError("name") && (
-                    <div className="animate-[shake_0.5s_ease-in-out]">
-                      <XCircle className="w-6 h-6 text-red-500" />
-                    </div>
-                  )}
-                </div>
-
-                {hasFieldError("name") && (
-                  <p className="text-red-500 text-sm mt-1.5 ml-1 animate-[slide-down_0.3s_ease-out]">
-                    {errors.name?.message}
-                  </p>
-                )}
-              </div>
-              <div className="relative">
-                <input
-                  type="text"
-                  {...register("username")}
-                  id="username"
-                  className={`peer w-full rounded-xl p-3 pr-12 bg-slate-50 [:not(:placeholder-shown)]:bg-white focus:bg-white focus:outline-0 transition-all duration-300 border-2 placeholder-transparent ${
-                    hasFieldError("username")
-                      ? "border-red-400 focus:border-red-500"
-                      : isFieldValid("username")
-                        ? "border-green-400 focus:border-green-500"
-                        : "border-slate-200 focus:border-purple-500"
-                  }`}
-                  placeholder="Enter Your username"
-                />
-                <label
-                  htmlFor="username"
-                  className={`absolute left-3 -top-3 bg-slate-50 px-2 text-slate-600 transition-all duration-300 pointer-events-none text-xs
-                    peer-placeholder-shown:top-3 peer-placeholder-shown:bg-transparent peer-placeholder-shown:text-base
-                    peer-focus:-top-3 peer-focus:bg-white peer-focus:text-xs
-                    peer-[:not(:placeholder-shown)]:-top-3 peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:text-xs ${
-                      hasFieldError("username")
-                        ? "peer-focus:text-red-500"
-                        : isFieldValid("username")
-                          ? "peer-focus:text-green-500"
-                          : "peer-focus:text-purple-500"
-                    }`}
-                >
-                  Enter Your Username
-                </label>
-
-                <div className="absolute right-3 top-3.5">
-                  {isFieldValid("username") && (
-                    <div className="animate-[scale-in_0.3s_ease-out]">
-                      <CheckCircle2 className="w-6 h-6 text-green-500" />
-                    </div>
-                  )}
-                  {hasFieldError("username") && (
-                    <div className="animate-[shake_0.5s_ease-in-out]">
-                      <XCircle className="w-6 h-6 text-red-500" />
-                    </div>
-                  )}
-                </div>
-
-                {hasFieldError("username") && (
-                  <p className="text-red-500 text-sm mt-1.5 ml-1 animate-[slide-down_0.3s_ease-out]">
-                    {errors.username?.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="relative">
-                <input
-                  type="email"
-                  {...register("email")}
-                  id="email"
-                  className={`peer w-full [:not(:placeholder-shown)]:bg-white rounded-xl p-3 pr-12 bg-slate-50 focus:bg-white focus:outline-0 transition-all duration-300 border-2 placeholder-transparent ${
-                    hasFieldError("email")
-                      ? "border-red-400 focus:border-red-500"
-                      : isFieldValid("email")
-                        ? "border-green-400 focus:border-green-500"
-                        : "border-slate-200 focus:border-purple-500"
-                  }`}
-                  placeholder="Email@domain.com"
-                />
-                <label
-                  htmlFor="email"
-                  className={`absolute left-3 -top-3 bg-slate-50 px-2 text-slate-600 transition-all duration-300 pointer-events-none text-xs
-                    peer-placeholder-shown:top-3 peer-placeholder-shown:bg-transparent peer-placeholder-shown:text-base
-                    peer-focus:-top-3 peer-focus:bg-white peer-focus:text-xs
-                    peer-[:not(:placeholder-shown)]:-top-3 peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:text-xs ${
-                      hasFieldError("email")
-                        ? "peer-focus:text-red-500"
-                        : isFieldValid("email")
-                          ? "peer-focus:text-green-500"
-                          : "peer-focus:text-purple-500"
-                    }`}
-                >
-                  Email@domain.com
-                </label>
-
-                <div className="absolute right-3 top-3.5">
-                  {isFieldValid("email") && (
-                    <div className="animate-[scale-in_0.3s_ease-out]">
-                      <CheckCircle2 className="w-6 h-6 text-green-500" />
-                    </div>
-                  )}
-                  {hasFieldError("email") && (
-                    <div className="animate-[shake_0.5s_ease-in-out]">
-                      <XCircle className="w-6 h-6 text-red-500" />
-                    </div>
-                  )}
-                </div>
-
-                {hasFieldError("email") && (
-                  <p className="text-red-500 text-sm mt-1.5 ml-1 animate-[slide-down_0.3s_ease-out]">
-                    {errors.email?.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="relative">
-                <input
-                  type="password"
-                  {...register("password")}
-                  id="password"
-                  className={`peer w-full [:not(:placeholder-shown)]:bg-white rounded-xl p-3 pr-12 bg-slate-50 focus:bg-white focus:outline-0 transition-all duration-300 border-2 placeholder-transparent ${
-                    hasFieldError("password")
-                      ? "border-red-400 focus:border-red-500"
-                      : isFieldValid("password")
-                        ? "border-green-400 focus:border-green-500"
-                        : "border-slate-200 focus:border-purple-500"
-                  }`}
-                  placeholder="Your Password"
-                />
-                <label
-                  htmlFor="password"
-                  className={`absolute left-3 -top-3 bg-slate-50 px-2 text-slate-600 transition-all duration-300 pointer-events-none text-xs
-                    peer-placeholder-shown:top-3 peer-placeholder-shown:bg-transparent peer-placeholder-shown:text-base
-                    peer-focus:-top-3 peer-focus:bg-white peer-focus:text-xs
-                    peer-[:not(:placeholder-shown)]:-top-3 peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:text-xs ${
-                      hasFieldError("password")
-                        ? "peer-focus:text-red-500"
-                        : isFieldValid("password")
-                          ? "peer-focus:text-green-500"
-                          : "peer-focus:text-purple-500"
-                    }`}
-                >
-                  Your Password
-                </label>
-
-                <div className="absolute right-3 top-3.5">
-                  {isFieldValid("password") && (
-                    <div className="animate-[scale-in_0.3s_ease-out]">
-                      <CheckCircle2 className="w-6 h-6 text-green-500" />
-                    </div>
-                  )}
-                  {hasFieldError("password") && (
-                    <div className="animate-[shake_0.5s_ease-in-out]">
-                      <XCircle className="w-6 h-6 text-red-500" />
-                    </div>
-                  )}
-                </div>
-
-                {hasFieldError("password") && (
-                  <p className="text-red-500 text-sm mt-1.5 ml-1 animate-[slide-down_0.3s_ease-out]">
-                    {errors.password?.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="relative">
-                <input
-                  type="password"
-                  {...register("rePassword")}
-                  id="confirmPassword"
-                  className={`peer w-full [:not(:placeholder-shown)]:bg-white rounded-xl p-3 pr-12 bg-slate-50 focus:bg-white focus:outline-0 transition-all duration-300 border-2 placeholder-transparent ${
-                    hasFieldError("rePassword")
-                      ? "border-red-400 focus:border-red-500"
-                      : isFieldValid("rePassword")
-                        ? "border-green-400 focus:border-green-500"
-                        : "border-slate-200 focus:border-purple-500"
-                  }`}
-                  placeholder="Confirm Password"
-                />
-                <label
-                  htmlFor="confirmPassword"
-                  className={`absolute left-3 -top-3 bg-slate-50 px-2 text-slate-600 transition-all duration-300 pointer-events-none text-xs
-                    peer-placeholder-shown:top-3 peer-placeholder-shown:bg-transparent peer-placeholder-shown:text-base
-                    peer-focus:-top-3 peer-focus:bg-white peer-focus:text-xs
-                    peer-[:not(:placeholder-shown)]:-top-3 peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:text-xs ${
-                      hasFieldError("rePassword")
-                        ? "peer-focus:text-red-500"
-                        : isFieldValid("rePassword")
-                          ? "peer-focus:text-green-500"
-                          : "peer-focus:text-purple-500"
-                    }`}
-                >
-                  Confirm Password
-                </label>
-
-                <div className="absolute right-3 top-3.5">
-                  {isFieldValid("rePassword") && (
-                    <div className="animate-[scale-in_0.3s_ease-out]">
-                      <CheckCircle2 className="w-6 h-6 text-green-500" />
-                    </div>
-                  )}
-                  {hasFieldError("rePassword") && (
-                    <div className="animate-[shake_0.5s_ease-in-out]">
-                      <XCircle className="w-6 h-6 text-red-500" />
-                    </div>
-                  )}
-                </div>
-
-                {hasFieldError("rePassword") && (
-                  <p className="text-red-500 text-sm mt-1.5 ml-1 animate-[slide-down_0.3s_ease-out]">
-                    {errors.rePassword?.message ||
-                      (watchedFields.password !== watchedFields.rePassword
-                        ? "Password and Repassword must be the same"
-                        : "")}
-                  </p>
-                )}
-              </div>
-
-              <div className="relative">
-                <input
-                  type="date"
-                  {...register("dateOfBirth")}
-                  id="birthdate"
-                  className={`peer w-full [:not(:placeholder-shown)]:bg-white  rounded-xl p-3 pr-12 bg-slate-50 focus:bg-white focus:outline-0 transition-all duration-300 border-2 placeholder-transparent ${
-                    hasFieldError("dateOfBirth")
-                      ? "border-red-400 focus:border-red-500"
-                      : isFieldValid("dateOfBirth")
-                        ? "border-green-400 focus:border-green-500"
-                        : "border-slate-200 focus:border-purple-500"
-                  }`}
-                  placeholder="Birthdate"
-                />
-                <label
-                  htmlFor="birthdate"
-                  className={`absolute left-3 -top-3 bg-slate-50 px-2 text-slate-600 transition-all duration-300 pointer-events-none text-xs
-                    peer-placeholder-shown:top-3 peer-placeholder-shown:bg-transparent peer-placeholder-shown:text-base
-                    peer-focus:-top-3 peer-focus:bg-white peer-focus:text-xs
-                    peer-[:not(:placeholder-shown)]:-top-3 peer-[:not(:placeholder-shown)]:bg-white peer-[:not(:placeholder-shown)]:text-xs ${
-                      hasFieldError("dateOfBirth")
-                        ? "peer-focus:text-red-500"
-                        : isFieldValid("dateOfBirth")
-                          ? "peer-focus:text-green-500"
-                          : "peer-focus:text-purple-500"
-                    }`}
-                >
-                  Birthdate
-                </label>
-
-                <div className="absolute right-3 top-3.5">
-                  {isFieldValid("dateOfBirth") && (
-                    <div className="animate-[scale-in_0.3s_ease-out]">
-                      <CheckCircle2 className="w-6 h-6 text-green-500" />
-                    </div>
-                  )}
-                  {hasFieldError("dateOfBirth") && (
-                    <div className="animate-[shake_0.5s_ease-in-out]">
-                      <XCircle className="w-6 h-6 text-red-500" />
-                    </div>
-                  )}
-                </div>
-
-                {hasFieldError("dateOfBirth") && (
-                  <p className="text-red-500 text-sm mt-1.5 ml-1 animate-[slide-down_0.3s_ease-out]">
-                    {errors.dateOfBirth?.message}
-                  </p>
-                )}
-              </div>
-
-              <div className="relative">
-                <div className="flex gap-6 justify-start">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      {...register("gender")}
-                      id="male"
-                      value="male"
-                      className="w-5 h-5 accent-purple-500 cursor-pointer"
-                    />
-                    <label
-                      htmlFor="male"
-                      className="text-slate-700 cursor-pointer"
-                    >
-                      Male
-                    </label>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      {...register("gender")}
-                      id="female"
-                      value="female"
-                      className="w-5 h-5 accent-purple-500 cursor-pointer"
-                    />
-                    <label
-                      htmlFor="female"
-                      className="text-slate-700 cursor-pointer"
-                    >
-                      Female
-                    </label>
-                  </div>
-                </div>
-
-                {hasFieldError("gender") && (
-                  <p className="text-red-500 text-sm mt-1.5 ml-1 animate-[slide-down_0.3s_ease-out]">
-                    {errors.gender?.message}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <button
-              disabled={isloading}
-              className="w-full md:w-3/4 mt-4 flex items-center justify-center gap-2
-             cursor-pointer disabled:bg-purple-300 
-             disabled:cursor-not-allowed hover:bg-purple-500 
-             transition-all duration-300 py-3 
-             bg-purple-400 rounded-2xl 
-             text-white font-bold"
+            <motion.div
+              variants={fadeUp}
+              className="flex flex-col items-center gap-1 mb-2"
             >
-              {isloading ? (
-                <>
-                  <i className="fa-solid fa-circle-notch fa-spin"></i>
-                  <span>Loading</span>
-                </>
-              ) : (
-                "Sign Up"
-              )}
-            </button>
-          </form>
-        </div>
-      </div>
+              <div className="h-12 w-12 rounded-2xl bg-linear-to-br from-purple-500 to-violet-600 flex items-center justify-center shadow-lg shadow-purple-200 mb-3">
+                <UserPlus size={22} className="text-white" />
+              </div>
+              <h2 className="text-3xl font-bold text-slate-900 tracking-tight">
+                Create account
+              </h2>
+              <p className="text-sm text-slate-400 mt-1">
+                Already have an account?{" "}
+                <Link
+                  className="text-purple-500 font-semibold hover:underline"
+                  to="/login"
+                >
+                  Sign In
+                </Link>
+              </p>
+            </motion.div>
 
-      <style>{`
-        @keyframes scale-in {
-          from {
-            transform: scale(0);
-            opacity: 0;
-          }
-          to {
-            transform: scale(1);
-            opacity: 1;
-          }
-        }
+            <form
+              onSubmit={handleSubmit(FormValidation)}
+              className="grid grid-cols-1 md:grid-cols-2 gap-4"
+            >
+              <FloatingField
+                id="name"
+                label="Full Name"
+                registration={register("name")}
+                icon={User}
+                isValid={isFieldValid("name")}
+                hasError={hasFieldError("name")}
+                errorMessage={errors.name?.message}
+              />
 
-        @keyframes shake {
-          0%,
-          100% {
-            transform: translateX(0);
-          }
-          25% {
-            transform: translateX(-5px);
-          }
-          75% {
-            transform: translateX(5px);
-          }
-        }
+              <FloatingField
+                id="username"
+                label="Username"
+                registration={register("username")}
+                icon={AtSign}
+                isValid={isFieldValid("username")}
+                hasError={hasFieldError("username")}
+                errorMessage={errors.username?.message}
+              />
 
-        @keyframes slide-down {
-          from {
-            transform: translateY(-10px);
-            opacity: 0;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
-        }
-      `}</style>
+              <div className="md:col-span-2">
+                <FloatingField
+                  id="email"
+                  label="Email Address"
+                  type="email"
+                  registration={register("email")}
+                  icon={Mail}
+                  isValid={isFieldValid("email")}
+                  hasError={hasFieldError("email")}
+                  errorMessage={errors.email?.message}
+                />
+              </div>
+
+              <FloatingField
+                id="password"
+                label="Password"
+                type={showPassword ? "text" : "password"}
+                registration={register("password")}
+                icon={Lock}
+                isValid={isFieldValid("password")}
+                hasError={hasFieldError("password")}
+                errorMessage={errors.password?.message}
+                rightSlot={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="text-slate-400 hover:text-purple-500 transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                  </button>
+                }
+              />
+
+              <FloatingField
+                id="rePassword"
+                label="Confirm Password"
+                type={showRePassword ? "text" : "password"}
+                registration={register("rePassword")}
+                icon={Lock}
+                isValid={isFieldValid("rePassword")}
+                hasError={hasFieldError("rePassword")}
+                errorMessage={errors.rePassword?.message}
+                rightSlot={
+                  <button
+                    type="button"
+                    onClick={() => setShowRePassword(!showRePassword)}
+                    className="text-slate-400 hover:text-purple-500 transition-colors"
+                  >
+                    {showRePassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                  </button>
+                }
+              />
+
+              <FloatingField
+                id="dateOfBirth"
+                label="Birthdate"
+                type="date"
+                registration={register("dateOfBirth")}
+                icon={Calendar}
+                isValid={isFieldValid("dateOfBirth")}
+                hasError={hasFieldError("dateOfBirth")}
+                errorMessage={errors.dateOfBirth?.message}
+              />
+
+              <motion.div
+                variants={fadeUp}
+                className={`flex items-center gap-6 px-4 py-3 rounded-xl border-2 transition-all duration-300 bg-slate-50
+                ${hasFieldError("gender") ? "border-red-400" : isFieldValid("gender") ? "border-green-400" : "border-slate-200"}`}
+              >
+                <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  Gender:
+                </span>
+                <div className="flex items-center gap-6 md:gap-4">
+                  {["male", "female"].map((g) => (
+                    <label
+                      key={g}
+                      className="flex items-center gap-2 cursor-pointer group"
+                    >
+                      <input
+                        type="radio"
+                        value={g}
+                        {...register("gender")}
+                        className="w-4 h-4 accent-purple-500 cursor-pointer"
+                      />
+                      <span className="text-sm text-slate-600 group-hover:text-purple-600 capitalize">
+                        {g}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </motion.div>
+
+              {/* Submit Button */}
+              <motion.button
+                variants={fadeUp}
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.98 }}
+                disabled={isloading}
+                className="md:col-span-2 w-full mt-2 cursor-pointer flex items-center justify-center gap-2 py-3.5 bg-linear-to-r from-purple-500 to-violet-600 text-white font-bold rounded-2xl shadow-lg shadow-purple-200 disabled:from-purple-300 transition-all"
+              >
+                {isloading ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />{" "}
+                    <span>Creating account...</span>
+                  </>
+                ) : (
+                  <>
+                    <UserPlus size={18} /> <span>Sign Up</span>
+                  </>
+                )}
+              </motion.button>
+            </form>
+          </motion.div>
+        </motion.div>
+      </motion.div>
     </section>
   );
 }
