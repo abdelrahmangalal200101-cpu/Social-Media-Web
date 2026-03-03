@@ -1,18 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useContext } from "react";
 import BgAnimation from "../SharedComponents/BgAnimation";
 import { Link, useNavigate } from "react-router-dom";
+import { AuthContext } from "../../Context/AuthContextProvider";
 import * as z from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   CheckCircle2,
   XCircle,
-  User,
-  AtSign,
   Mail,
   Lock,
-  Calendar,
-  UserPlus,
+  LogIn,
   Loader2,
   Eye,
   EyeOff,
@@ -21,44 +19,28 @@ import axios from "axios";
 import { addToast } from "@heroui/react";
 import { motion, AnimatePresence } from "framer-motion";
 
-// --- Validation Schema ---
-const schema = z
-  .object({
-    name: z
-      .string()
-      .nonempty("Name Is Required")
-      .min(3, "Min Length is 3")
-      .max(20, "Max Length is 20"),
-    username: z
-      .string()
-      .nonempty("Username Is Required")
-      .regex(/^[a-z0-9_-]+$/, "Invalid Format")
-      .min(3)
-      .max(15),
-    email: z
-      .string()
-      .nonempty("Email Is Required")
-      .email("Invalid email format"),
-    password: z
-      .string()
-      .nonempty("Password Is Required")
-      .regex(
-        /^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$/,
-        "Weak password",
-      ),
-    rePassword: z.string().nonempty("Required"),
-    dateOfBirth: z.string().refine((date) => {
-      const age = new Date().getFullYear() - new Date(date).getFullYear();
-      return age >= 18 && age <= 70;
-    }, "Age 18-70"),
-    gender: z.enum(["male", "female"], {
-      errorMap: () => ({ message: "Select gender" }),
-    }),
-  })
-  .refine((values) => values.password === values.rePassword, {
-    message: "Passwords mismatch",
-    path: ["rePassword"],
-  });
+const schema = z.object({
+  email: z.string().nonempty("Email Is Required").email("Invalid email format"),
+  password: z.string().nonempty("Password Is Required"),
+});
+
+const pageVariants = {
+  hidden: { opacity: 0, x: 40 },
+  visible: {
+    opacity: 1,
+    x: 0,
+    transition: { duration: 0.55, ease: "easeOut" },
+  },
+};
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 40, scale: 0.97 },
+  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.6 } },
+};
+
+const stagger = {
+  visible: { transition: { staggerChildren: 0.05, delayChildren: 0.2 } },
+};
 
 const fadeUp = {
   hidden: { opacity: 0, y: 15 },
@@ -79,30 +61,37 @@ function FloatingField({
   return (
     <motion.div variants={fadeUp} className="relative w-full">
       <span
-        className={`absolute left-3.5 top-4.25 z-10 ${hasError ? "text-red-400" : isValid ? "text-green-500" : "text-slate-400"}`}
+        className={`absolute left-3.5 top-4.25 z-10 transition-colors duration-200 
+        ${hasError ? "text-red-400" : isValid ? "text-green-500" : "text-slate-400"}`}
       >
         <Icon size={17} />
       </span>
+
       <input
         id={id}
         type={type}
         {...registration}
         placeholder=" "
-        className={`peer w-full rounded-xl pl-10 pr-10 pt-5 pb-2 bg-slate-50 focus:bg-white focus:outline-none transition-all border-2 text-sm
-        ${hasError ? "border-red-400 focus:border-red-500" : isValid ? "border-green-400 focus:border-green-500" : "border-slate-200 focus:border-purple-500"}`}
+        className={`peer w-full rounded-xl pl-10 pr-12 pt-5 pb-2 bg-slate-50 focus:bg-white 
+          focus:outline-none transition-all duration-300 border-2 text-sm text-slate-800
+          ${hasError ? "border-red-400 focus:border-red-500" : isValid ? "border-green-400 focus:border-green-500" : "border-slate-200 focus:border-purple-500"}`}
       />
+
       <label
         htmlFor={id}
-        className={`absolute left-10 top-4 text-sm pointer-events-none transition-all origin-left peer-focus:-translate-y-3 peer-focus:scale-[0.78] peer-not-placeholder-shown:-translate-y-3 peer-not-placeholder-shown:scale-[0.78]
-        ${hasError ? "text-red-400" : isValid ? "text-green-500" : "text-slate-400"}`}
+        className={`absolute left-10 top-4 text-sm pointer-events-none transition-all duration-200 origin-left
+          peer-focus:-translate-y-3 peer-focus:scale-[0.78] peer-not-placeholder-shown:-translate-y-3 peer-not-placeholder-shown:scale-[0.78]
+          ${hasError ? "text-red-400" : isValid ? "text-green-500" : "text-slate-400"}`}
       >
         {label}
       </label>
-      <div className="absolute right-3 top-4 flex items-center gap-1">
+
+      <div className="absolute right-3.5 top-4 flex items-center gap-1">
         {rightSlot}
         <AnimatePresence mode="wait">
           {isValid && (
             <motion.span
+              key="ok"
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0 }}
@@ -112,6 +101,7 @@ function FloatingField({
           )}
           {hasError && (
             <motion.span
+              key="err"
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0 }}
@@ -121,212 +111,186 @@ function FloatingField({
           )}
         </AnimatePresence>
       </div>
-      {hasError && (
-        <p className="text-red-500 text-[10px] mt-1 ml-1">{errorMessage}</p>
-      )}
+
+      <AnimatePresence>
+        {hasError && (
+          <motion.p
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="text-red-500 text-[11px] mt-1 ml-1"
+          >
+            {errorMessage}
+          </motion.p>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
 
-export default function Register() {
+export default function Login() {
   const navigate = useNavigate();
   const [isloading, setloading] = useState(false);
-  const [showPass, setShowPass] = useState(false);
-  const [showRePass, setShowRePass] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const { islogin, setLogin } = useContext(AuthContext);
 
   const { register, handleSubmit, formState, watch } = useForm({
+    defaultValues: {
+      email: "",
+      password: "",
+    },
     resolver: zodResolver(schema),
     mode: "onBlur",
   });
 
   const { errors, touchedFields } = formState;
   const watchedFields = watch();
+
   const isFieldValid = (f) =>
     touchedFields[f] && !errors[f] && watchedFields[f];
+
   const hasFieldError = (f) => touchedFields[f] && errors[f];
 
-  function FormValidation(values) {
+  function handleLogin(values) {
     setloading(true);
+
     axios
-      .post("https://route-posts.routemisr.com/users/signup", values)
-      .then(() => {
-        addToast({ title: "Account Created!", color: "success" });
-        setTimeout(() => navigate("/login"), 2000);
+      .post("https://route-posts.routemisr.com/users/signin", values)
+      .then((res) => {
+        addToast({
+          title: "Welcome Back 👋",
+          description: "Logged in successfully",
+          color: "success",
+          timeout: 3000,
+          shouldShowTimeoutProgress: true,
+        });
+
+        setTimeout(() => {
+          localStorage.setItem("Token", res.data.data.token);
+          setLogin(res.data.data.token);
+          navigate("/home");
+        }, 3000);
       })
       .catch((err) => {
         addToast({
-          title: "Error",
-          description: err.response?.data?.message,
+          title: "Login Failed",
+          description: "Incorrect Email Or Password",
           color: "danger",
+          timeout: 3000,
+          shouldShowTimeoutProgress: true,
         });
+
         setloading(false);
       });
   }
 
   return (
     <section className="min-h-screen flex flex-col lg:flex-row bg-slate-50">
-      {/* Left Side: Animation (Matched with Login) */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.7 }}
+        transition={{ duration: 0.8 }}
         className="w-full lg:w-1/2 h-56 sm:h-72 lg:h-screen shrink-0"
       >
         <BgAnimation />
       </motion.div>
 
       <motion.div
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        className="w-full lg:w-1/2 flex items-center justify-center px-5 py-8"
+        variants={pageVariants}
+        initial="hidden"
+        animate="visible"
+        className="w-full lg:w-1/2 flex items-center justify-center px-5 sm:px-12 py-10"
       >
-        <div className="w-full max-w-xl bg-white rounded-3xl border border-purple-100 shadow-xl p-6 sm:p-10">
-          <div className="flex flex-col gap-4">
-            <div className="text-center">
-              <div className="h-12 w-12 rounded-2xl bg-linear-to-br from-purple-500 to-violet-600 flex items-center justify-center shadow-lg mx-auto mb-3">
-                <UserPlus size={22} className="text-white" />
+        <motion.div
+          variants={cardVariants}
+          className="w-full max-w-xl bg-white rounded-3xl border border-purple-200/60 shadow-xl shadow-purple-100/40 p-7 sm:p-10"
+        >
+          <motion.div
+            variants={stagger}
+            initial="hidden"
+            animate="visible"
+            className="flex flex-col gap-5"
+          >
+            <motion.div
+              variants={fadeUp}
+              className="flex flex-col items-center gap-1 mb-2"
+            >
+              <div className="h-12 w-12 rounded-2xl bg-linear-to-br from-purple-500 to-violet-600 flex items-center justify-center shadow-lg shadow-purple-200 mb-3">
+                <LogIn size={22} className="text-white" />
               </div>
-              <h2 className="text-2xl font-bold text-slate-900">
-                Create account
+
+              <h2 className="text-3xl font-bold text-slate-900 tracking-tight">
+                Welcome Back
               </h2>
+
               <p className="text-sm text-slate-400 mt-1">
-                Already have an account?{" "}
-                <Link className="text-purple-500 font-bold" to="/login">
-                  Sign In
+                Don’t have an account?{" "}
+                <Link
+                  className="text-purple-500 font-semibold hover:underline"
+                  to="/register"
+                >
+                  Sign Up
                 </Link>
               </p>
-            </div>
+            </motion.div>
 
             <form
-              onSubmit={handleSubmit(FormValidation)}
-              className="grid grid-cols-2 gap-3"
+              onSubmit={handleSubmit(handleLogin)}
+              className="grid grid-cols-1 gap-4"
             >
-              <div className="col-span-2 md:col-span-1">
-                <FloatingField
-                  id="name"
-                  label="Full Name"
-                  registration={register("name")}
-                  icon={User}
-                  isValid={isFieldValid("name")}
-                  hasError={hasFieldError("name")}
-                  errorMessage={errors.name?.message}
-                />
-              </div>
-              <div className="col-span-2 md:col-span-1">
-                <FloatingField
-                  id="username"
-                  label="Username"
-                  registration={register("username")}
-                  icon={AtSign}
-                  isValid={isFieldValid("username")}
-                  hasError={hasFieldError("username")}
-                  errorMessage={errors.username?.message}
-                />
-              </div>
+              <FloatingField
+                id="email"
+                label="Email Address"
+                type="email"
+                registration={register("email")}
+                icon={Mail}
+                isValid={isFieldValid("email")}
+                hasError={hasFieldError("email")}
+                errorMessage={errors.email?.message}
+              />
 
-              <div className="col-span-2">
-                <FloatingField
-                  id="email"
-                  label="Email Address"
-                  type="email"
-                  registration={register("email")}
-                  icon={Mail}
-                  isValid={isFieldValid("email")}
-                  hasError={hasFieldError("email")}
-                  errorMessage={errors.email?.message}
-                />
-              </div>
-
-              <div className="col-span-2 md:col-span-1">
-                <FloatingField
-                  id="password"
-                  label="Password"
-                  type={showPass ? "text" : "password"}
-                  registration={register("password")}
-                  icon={Lock}
-                  isValid={isFieldValid("password")}
-                  hasError={hasFieldError("password")}
-                  errorMessage={errors.password?.message}
-                  rightSlot={
-                    <button
-                      type="button"
-                      onClick={() => setShowPass(!showPass)}
-                    >
-                      {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  }
-                />
-              </div>
-              <div className="col-span-2 md:col-span-1">
-                <FloatingField
-                  id="rePassword"
-                  label="Confirm"
-                  type={showRePass ? "text" : "password"}
-                  registration={register("rePassword")}
-                  icon={Lock}
-                  isValid={isFieldValid("rePassword")}
-                  hasError={hasFieldError("rePassword")}
-                  errorMessage={errors.rePassword?.message}
-                  rightSlot={
-                    <button
-                      type="button"
-                      onClick={() => setShowRePass(!showRePass)}
-                    >
-                      {showRePass ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  }
-                />
-              </div>
-
-              {/* Birthdate & Gender (Side by side on all screens) */}
-              <div className="col-span-1">
-                <FloatingField
-                  id="dateOfBirth"
-                  label="Birthdate"
-                  type="date"
-                  registration={register("dateOfBirth")}
-                  icon={Calendar}
-                  isValid={isFieldValid("dateOfBirth")}
-                  hasError={hasFieldError("dateOfBirth")}
-                  errorMessage={errors.dateOfBirth?.message}
-                />
-              </div>
-              <div
-                className={`col-span-1 flex items-center justify-around px-2 rounded-xl border-2 transition-all bg-slate-50 ${hasFieldError("gender") ? "border-red-400" : isFieldValid("gender") ? "border-green-400" : "border-slate-200"}`}
-              >
-                {["male", "female"].map((g) => (
-                  <label
-                    key={g}
-                    className="flex items-center gap-1 cursor-pointer"
+              <FloatingField
+                id="password"
+                label="Password"
+                type={showPassword ? "text" : "password"}
+                registration={register("password")}
+                icon={Lock}
+                isValid={isFieldValid("password")}
+                hasError={hasFieldError("password")}
+                errorMessage={errors.password?.message}
+                rightSlot={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="text-slate-400 hover:text-purple-500 transition-colors"
                   >
-                    <input
-                      type="radio"
-                      value={g}
-                      {...register("gender")}
-                      className="w-3.5 h-3.5 accent-purple-500"
-                    />
-                    <span className="text-[12px] text-slate-600 capitalize">
-                      {g === "male" ? "M" : "F"}
-                    </span>
-                  </label>
-                ))}
-              </div>
+                    {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                  </button>
+                }
+              />
 
               <motion.button
+                variants={fadeUp}
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.98 }}
                 disabled={isloading}
-                className="col-span-2 w-full mt-2 py-3.5 bg-linear-to-r from-purple-500 to-violet-600 text-white font-bold rounded-2xl shadow-lg disabled:opacity-70 flex justify-center items-center gap-2"
+                className="w-full mt-2 flex items-center justify-center gap-2 py-3.5 bg-linear-to-r from-purple-500 to-violet-600 text-white font-bold rounded-2xl shadow-lg shadow-purple-200 disabled:from-purple-300 transition-all"
               >
                 {isloading ? (
-                  <Loader2 size={18} className="animate-spin" />
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    <span>Logging in...</span>
+                  </>
                 ) : (
-                  "Sign Up"
+                  <>
+                    <LogIn size={18} />
+                    <span>Login</span>
+                  </>
                 )}
               </motion.button>
             </form>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </motion.div>
     </section>
   );
